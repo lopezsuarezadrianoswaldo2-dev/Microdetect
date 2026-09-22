@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "341450239456",
+    "project_id": "bioconteo-pruebas",
+    "storage_bucket": "bioconteo-pruebas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341450239456:android:04ef76679b24b3339c4f85",
+        "android_client_info": {
+          "package_name": "com.example.bioconteo_colonias_bacterinas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8tu3-CpuV4c2LfR2GqcjH9agws00xOYw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
