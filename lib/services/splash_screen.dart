@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'auth_wrapper.dart';
@@ -43,30 +44,20 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
       body: Column(
         children: [
           const Spacer(flex: 3),
 
-          // 🧫 LOGO
+          // 🧫 LOGO MICRODETECT
           Image.asset(
-            'assets/images/logo.png',
-            height: 170,
+            'assets/images/micro.png',
+            height: 260,
+            // Funde el fondo del logo con el fondo de la app (quítalo si tu logo ya es PNG transparente)
+            color: AppColors.fondo,
+            colorBlendMode: BlendMode.darken,
           ),
 
-          const SizedBox(height: 25),
-
-          // 🧪 TEXTO
-          const Text(
-            'BioConteo de Colonias\nBacterianas',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 2,
-            ),
-          ),
 
           const Spacer(flex: 2),
 
@@ -89,7 +80,7 @@ class _SplashScreenState extends State<SplashScreen>
                         scale: 0.6 + (value < 0.5 ? value : 1 - value),
                         child: const CircleAvatar(
                           radius: 6,
-                          backgroundColor: Colors.blueAccent,
+                          backgroundColor: AppColors.primario,
                         ),
                       ),
                     );
@@ -97,6 +88,12 @@ class _SplashScreenState extends State<SplashScreen>
                 );
               },
             ),
+          ),
+
+          const SizedBox(height: 8),
+          const Text(
+            'Iniciando...',
+            style: TextStyle(color: AppColors.primario, fontSize: 13),
           ),
 
           const Spacer(flex: 1),

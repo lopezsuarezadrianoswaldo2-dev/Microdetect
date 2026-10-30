@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:bioconteo_colonias_bacterinas/services/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,11 +30,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: AppTheme.tema,
 
       // 🔥 PRIMERA PANTALLA
-      home: SplashScreen(),
+      home: const SplashScreen(),
     );
   }
 }

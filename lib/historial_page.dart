@@ -1,107 +1,127 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
+import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login.dart';
-import 'detalles_page.dart'; // 👈 IMPORTANTE
+import 'package:flutter/material.dart';
+import 'detalles_page.dart';
+import 'services/auth_wrapper.dart';
 
 class HistorialPage extends StatelessWidget {
+  const HistorialPage({super.key});
+
+  // Cierra la sesión de Firebase de verdad y regresa al AuthWrapper,
+  // que decide solo si mostrar Login o Home.
+  Future<void> _cerrarSesion(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await FirebaseAuth.instance.signOut();
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthWrapper()),
+      (route) => false,
+    );
+  }
+
+  // Convierte el texto base64 de Firestore en bytes de imagen.
+  // Devuelve null si está vacío o dañado.
+  Uint8List? _decodificar(String texto) {
+    if (texto.isEmpty) return null;
+    try {
+      return base64Decode(texto);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Fecha de creación en milisegundos. Si Firestore todavía no la
+  // confirmó (null), se trata como "ahora" para que salga primero.
+  int _creadoMs(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final valor = data['creado'];
+    if (valor is Timestamp) return valor.millisecondsSinceEpoch;
+    return DateTime.now().millisecondsSinceEpoch;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: Color(0xFF0D1B2A),
-
+      backgroundColor: AppColors.fondo,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: AppColors.texto),
           onPressed: () => Navigator.pop(context),
         ),
-
-        title: Text(
-          "Historial",
-          style: TextStyle(fontSize: 22, color: Colors.white),
+        title: const Text(
+          'Historial',
+          style: TextStyle(fontSize: 22, color: AppColors.texto),
         ),
-
         actions: [
           IconButton(
-            icon: Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => Login()),
-              );
-            },
+            icon: const Icon(Icons.logout, color: AppColors.texto),
+            onPressed: () => _cerrarSesion(context),
           ),
         ],
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            Text(
-              "Historial de conteo",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 18,
-              ),
+            const Text(
+              'Historial de conteo',
+              style: TextStyle(color: AppColors.textoSecundario, fontSize: 18),
             ),
+            const SizedBox(height: 25),
 
-            SizedBox(height: 25),
-
-            // ============================================================
-            // Lista conectada a Firestore, filtrada solo por el usuario
-            // que inició sesión (campo "uid" guardado en cada reporte).
-            // ============================================================
+            // Lista conectada a Firestore, solo del usuario con sesión.
+            // Se ordena aquí en la app (no en la consulta) para no
+            // necesitar crear un índice compuesto en Firebase.
             Expanded(
               child: user == null
-                  ? Center(
+                  ? const Center(
                       child: Text(
-                        "No hay sesión iniciada.",
-                        style: TextStyle(color: Colors.white70),
+                        'No hay sesión iniciada.',
+                        style: TextStyle(color: AppColors.textoSecundario),
                       ),
                     )
                   : StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('reportes')
                           .where('uid', isEqualTo: user.uid)
-                          .orderBy('creado', descending: true)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Center(
                             child: Text(
-                              "Error al cargar el historial:\n${snapshot.error}",
+                              'Error al cargar el historial:\n${snapshot.error}',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.redAccent),
+                              style: const TextStyle(color: Colors.redAccent),
                             ),
                           );
                         }
 
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
-                          return Center(
+                          return const Center(
                             child: CircularProgressIndicator(
-                              color: Colors.white,
+                              color: AppColors.texto,
                             ),
                           );
                         }
 
-                        final docs = snapshot.data?.docs ?? [];
+                        final docs = [...(snapshot.data?.docs ?? [])];
+                        docs.sort((a, b) => _creadoMs(b).compareTo(_creadoMs(a)));
 
                         if (docs.isEmpty) {
-                          return Center(
+                          return const Center(
                             child: Text(
-                              "Todavía no tienes reportes guardados.",
-                              style: TextStyle(color: Colors.white70),
+                              'Todavía no tienes reportes guardados.',
+                              style: TextStyle(color: AppColors.textoSecundario),
                             ),
                           );
                         }
@@ -114,34 +134,25 @@ class HistorialPage extends StatelessWidget {
 
                             final String fecha =
                                 (data['fecha'] ?? '').toString();
-                            final String hora =
-                                (data['hora'] ?? '').toString();
+                            final String hora = (data['hora'] ?? '').toString();
                             final String conteo =
                                 (data['conteo'] ?? '').toString();
                             final String descripcion =
                                 (data['descripcion'] ?? '').toString();
 
-                            // ------------------------------------------------
-                            // La imagen se guarda como RUTA LOCAL en el
-                            // celular (no una URL de internet). Hay que
-                            // verificar que el archivo todavía exista antes
-                            // de intentar mostrarlo.
-                            // ------------------------------------------------
+                            // La foto viene dentro del reporte (imagenBase64).
+                            // Los reportes viejos solo tienen una ruta local
+                            // del celular (imageUrl); se usa como respaldo.
+                            final String imagenBase64 =
+                                (data['imagenBase64'] ?? '').toString();
+                            final Uint8List? imagenBytes =
+                                _decodificar(imagenBase64);
+
                             final String rutaImagen =
                                 (data['imageUrl'] ?? '').toString();
-
                             final File archivoImagen = File(rutaImagen);
-
                             final bool imagenExiste = rutaImagen.isNotEmpty &&
                                 archivoImagen.existsSync();
-
-                            // ---- DIAGNÓSTICO TEMPORAL ----
-                            debugPrint('[HISTORIAL] Ruta: "$rutaImagen"');
-                            debugPrint(
-                                '[HISTORIAL] Longitud de la ruta: ${rutaImagen.length}');
-                            debugPrint(
-                                '[HISTORIAL] ¿Existe el archivo?: $imagenExiste');
-                            // -------------------------------
 
                             return GestureDetector(
                               onTap: () {
@@ -153,12 +164,9 @@ class HistorialPage extends StatelessWidget {
                                       hora: hora,
                                       conteo: conteo,
                                       descripcion: descripcion,
-                                      // DetallesPage espera una ruta local
-                                      // (File), así que si no existe la
-                                      // imagen real, usamos un marcador.
-                                      imagePath: imagenExiste
-                                          ? rutaImagen
-                                          : 'assets/muestra1.png',
+                                      imagenBase64: imagenBase64,
+                                      // Respaldo para reportes viejos.
+                                      imagePath: imagenExiste ? rutaImagen : '',
                                     ),
                                   ),
                                 );
@@ -167,6 +175,7 @@ class HistorialPage extends StatelessWidget {
                                 fecha: fecha,
                                 hora: hora,
                                 descripcion: descripcion,
+                                imagenBytes: imagenBytes,
                                 imagenExiste: imagenExiste,
                                 archivoImagen: archivoImagen,
                               ),
@@ -187,43 +196,50 @@ class HistorialPage extends StatelessWidget {
     required String fecha,
     required String hora,
     required String descripcion,
+    required Uint8List? imagenBytes,
     required bool imagenExiste,
     required File archivoImagen,
   }) {
     return Container(
-      margin: EdgeInsets.only(bottom: 15),
-      padding: EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Color(0xFF1B263B),
+        color: AppColors.tarjeta,
         borderRadius: BorderRadius.circular(15),
       ),
-
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           // Miniatura de la foto real (o un ícono si no existe)
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: imagenExiste
-                ? Image.file(
-                    archivoImagen,
+            child: imagenBytes != null
+                ? Image.memory(
+                    imagenBytes,
                     width: 60,
                     height: 60,
                     fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    cacheWidth: 120,
                   )
-                : Container(
+                : imagenExiste
+                    ? Image.file(
+                        archivoImagen,
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
                     width: 60,
                     height: 60,
-                    color: Colors.white10,
-                    child: Icon(
+                    color: Colors.white,
+                    child: const Icon(
                       Icons.image_not_supported,
-                      color: Colors.white38,
+                      color: AppColors.textoTenue,
                     ),
                   ),
           ),
-
-          SizedBox(width: 15),
+          const SizedBox(width: 15),
 
           // Texto del registro
           Expanded(
@@ -231,23 +247,23 @@ class HistorialPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Fecha: $fecha",
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  'Fecha: $fecha',
+                  style: const TextStyle(color: AppColors.texto, fontSize: 16),
                 ),
                 Text(
-                  "Hora: $hora",
-                  style: TextStyle(color: Colors.white70, fontSize: 15),
+                  'Hora: $hora',
+                  style: const TextStyle(color: AppColors.textoSecundario, fontSize: 15),
                 ),
-                SizedBox(height: 5),
+                const SizedBox(height: 5),
                 Text(
                   descripcion,
-                  style: TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: AppColors.textoSecundario),
                 ),
               ],
             ),
           ),
 
-          Icon(Icons.info_outline, color: Colors.white54, size: 30),
+          const Icon(Icons.info_outline, color: AppColors.textoSecundario, size: 30),
         ],
       ),
     );

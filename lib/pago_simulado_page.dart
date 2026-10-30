@@ -1,4 +1,6 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'services/plan_service.dart';
 
 /// ============================================================
@@ -16,7 +18,7 @@ import 'services/plan_service.dart';
 class PagoSimuladoPage extends StatefulWidget {
   final AppPlan plan;
 
-  const PagoSimuladoPage({Key? key, required this.plan}) : super(key: key);
+  const PagoSimuladoPage({super.key, required this.plan});
 
   @override
   State<PagoSimuladoPage> createState() => _PagoSimuladoPageState();
@@ -46,12 +48,26 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
 
     setState(() => _procesando = true);
 
-    // Simulamos el "tiempo de procesamiento" de una pasarela real.
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Simulamos el "tiempo de procesamiento" de una pasarela real.
+      await Future.delayed(const Duration(seconds: 2));
 
-    // Aquí, en un cobro real, se validaría la respuesta del banco.
-    // Como es ficticio, simplemente lo damos por exitoso.
-    await PlanService.cambiarPlan(widget.plan);
+      // Como el pago es ficticio, se da por aprobado y se guarda el
+      // nuevo plan en Firestore (usuarios/{uid}.plan). Al cambiar ese
+      // campo, la pantalla principal desbloquea las funciones sola.
+      await PlanService.cambiarPlan(widget.plan).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception(
+            'Tiempo agotado. Revisa tu internet y las reglas de Firestore.'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _procesando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo completar el pago: $e')),
+      );
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _procesando = false);
@@ -61,18 +77,18 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1B263B),
+        backgroundColor: AppColors.tarjeta,
         title: Row(
           children: const [
-            Icon(Icons.check_circle, color: Colors.greenAccent),
+            Icon(Icons.check_circle, color: Colors.green),
             SizedBox(width: 10),
-            Text('Pago exitoso', style: TextStyle(color: Colors.white)),
+            Text('Pago exitoso', style: TextStyle(color: AppColors.texto)),
           ],
         ),
         content: Text(
           'Tu plan ahora es ${widget.plan.nombre} ✅\n\n'
           '(Este es un pago simulado, no se realizó ningún cargo real.)',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: AppColors.textoSecundario),
         ),
         actions: [
           ElevatedButton(
@@ -80,14 +96,36 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
               Navigator.pop(context); // cierra el diálogo
               Navigator.pop(context); // regresa a la pantalla de Planes
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF415A77),
-            ),
-            child: const Text('Listo', style: TextStyle(color: Colors.white)),
+            child: const Text('Listo'),
           ),
         ],
       ),
     );
+  }
+
+  String? _validarNumeroTarjeta(String? v) {
+    if (v == null || v.length != 16) {
+      return 'El número debe tener 16 dígitos';
+    }
+    return null;
+  }
+
+  String? _validarFecha(String? v) {
+    if (v == null || !RegExp(r'^(0[1-9]|1[0-2])/\d{2}$').hasMatch(v)) {
+      return 'Usa el formato MM/AA';
+    }
+    final mes = int.parse(v.substring(0, 2));
+    final anio = 2000 + int.parse(v.substring(3, 5));
+    final ahora = DateTime.now();
+    if (anio < ahora.year || (anio == ahora.year && mes < ahora.month)) {
+      return 'La tarjeta está vencida';
+    }
+    return null;
+  }
+
+  String? _validarCvv(String? v) {
+    if (v == null || v.length != 3) return 'El CVV tiene 3 dígitos';
+    return null;
   }
 
   String? _validarCampo(String? valor, String nombreCampo) {
@@ -100,12 +138,12 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Pago', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: AppColors.texto),
+        title: const Text('Pago', style: TextStyle(color: AppColors.texto)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -144,7 +182,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B263B),
+                  color: AppColors.tarjeta,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -158,14 +196,14 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
                           Text(
                             'Plan ${widget.plan.nombre}',
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.texto,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
                           Text(
                             widget.plan.precioReferencia,
-                            style: const TextStyle(color: Colors.white54),
+                            style: const TextStyle(color: AppColors.textoSecundario),
                           ),
                         ],
                       ),
@@ -178,7 +216,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
               const Text(
                 'Datos de la tarjeta (simulados)',
                 style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    color: AppColors.texto, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 12),
 
@@ -195,12 +233,8 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
                 icon: Icons.credit_card,
                 keyboardType: TextInputType.number,
                 maxLength: 16,
-                validator: (v) {
-                  if (v == null || v.trim().length < 4) {
-                    return 'Ingresa un número de tarjeta';
-                  }
-                  return null;
-                },
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                validator: _validarNumeroTarjeta,
               ),
               const SizedBox(height: 14),
               Row(
@@ -212,7 +246,8 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
                       icon: Icons.calendar_today,
                       keyboardType: TextInputType.datetime,
                       maxLength: 5,
-                      validator: (v) => _validarCampo(v, 'la fecha'),
+                      inputFormatters: [_FechaTarjetaFormatter()],
+                      validator: _validarFecha,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -224,7 +259,8 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
                       keyboardType: TextInputType.number,
                       maxLength: 3,
                       obscureText: true,
-                      validator: (v) => _validarCampo(v, 'el CVV'),
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: _validarCvv,
                     ),
                   ),
                 ],
@@ -237,7 +273,6 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
                 child: ElevatedButton(
                   onPressed: _procesando ? null : _procesarPagoFicticio,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF415A77),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -272,6 +307,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
     TextInputType keyboardType = TextInputType.text,
     int? maxLength,
     bool obscureText = false,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
@@ -279,20 +315,43 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
       keyboardType: keyboardType,
       maxLength: maxLength,
       obscureText: obscureText,
+      inputFormatters: inputFormatters,
       validator: validator,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppColors.texto),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: Icon(icon, color: Colors.white54),
-        counterStyle: const TextStyle(color: Colors.white38),
+        labelStyle: const TextStyle(color: AppColors.textoSecundario),
+        prefixIcon: Icon(icon, color: AppColors.textoSecundario),
+        counterStyle: const TextStyle(color: AppColors.textoTenue),
         filled: true,
-        fillColor: const Color(0xFF1B263B),
+        fillColor: AppColors.tarjeta,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
       ),
+    );
+  }
+}
+
+/// Escribe solo números y agrega la "/" sola: 1228 -> 12/28
+class _FechaTarjetaFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final soloDigitos = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final limitado =
+        soloDigitos.length > 4 ? soloDigitos.substring(0, 4) : soloDigitos;
+
+    final texto = limitado.length > 2
+        ? '${limitado.substring(0, 2)}/${limitado.substring(2)}'
+        : limitado;
+
+    return TextEditingValue(
+      text: texto,
+      selection: TextSelection.collapsed(offset: texto.length),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -56,7 +57,7 @@ Future<void> seleccionarImagen() async {
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Recortar imagen',
-          toolbarColor: Colors.blueAccent,
+          toolbarColor: AppColors.primario,
           toolbarWidgetColor: Colors.white,
           initAspectRatio: CropAspectRatioPreset.square,
           lockAspectRatio: true,
@@ -96,7 +97,7 @@ Future<void> seleccionarImagen() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
       body: SingleChildScrollView(
         child: Center(
           child: Padding(
@@ -116,12 +117,12 @@ Future<void> seleccionarImagen() async {
                         style: GoogleFonts.orbitron(
                           fontSize: 30,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppColors.texto,
                           letterSpacing: 2,
                           shadows: [
                             Shadow(
                                 blurRadius: 4,
-                                color: Colors.black54,
+                                color: AppColors.textoSecundario,
                                 offset: Offset(3, 3))
                           ],
                         ),
@@ -134,12 +135,12 @@ Future<void> seleccionarImagen() async {
                       onTap: seleccionarImagen,
                       child: CircleAvatar(
                         radius: 60,
-                        backgroundColor: Colors.white12,
+                        backgroundColor: Colors.white,
                         backgroundImage:
                             imagen != null ? FileImage(imagen!) : null,
                         child: imagen == null
                             ? Icon(Icons.camera_alt,
-                                color: Colors.white70, size: 40)
+                                color: AppColors.textoSecundario, size: 40)
                             : null,
                       ),
                     ),
@@ -148,13 +149,13 @@ Future<void> seleccionarImagen() async {
                     /// NOMBRE COMPLETO
                     TextFormField(
                       controller: nombreController,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.texto),
                       decoration: InputDecoration(
                         labelText: 'Nombre completo',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.person, color: Colors.white70),
+                        labelStyle: TextStyle(color: AppColors.textoSecundario),
+                        prefixIcon: Icon(Icons.person, color: AppColors.textoSecundario),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12)),
                         errorText: nombreVacio ? 'Campo obligatorio' : null,
@@ -166,13 +167,13 @@ Future<void> seleccionarImagen() async {
                     TextFormField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.texto),
                       decoration: InputDecoration(
                         labelText: 'Correo electrónico',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.email, color: Colors.white70),
+                        labelStyle: TextStyle(color: AppColors.textoSecundario),
+                        prefixIcon: Icon(Icons.email, color: AppColors.textoSecundario),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12)),
                         errorText: emailVacio ? 'Campo obligatorio' : null,
@@ -184,13 +185,13 @@ Future<void> seleccionarImagen() async {
                     TextFormField(
                       controller: passwordController,
                       obscureText: _obscurePassword,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.texto),
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                        labelStyle: TextStyle(color: AppColors.textoSecundario),
+                        prefixIcon: Icon(Icons.lock, color: AppColors.textoSecundario),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12)),
                         errorText: passwordVacio ? 'Campo obligatorio' : null,
@@ -199,7 +200,7 @@ Future<void> seleccionarImagen() async {
                             _obscurePassword
                                 ? Icons.visibility
                                 : Icons.visibility_off,
-                            color: Colors.white70,
+                            color: AppColors.textoSecundario,
                           ),
                           onPressed: () {
                             setState(() {
@@ -215,13 +216,13 @@ Future<void> seleccionarImagen() async {
                     TextFormField(
                       controller: confirmPasswordController,
                       obscureText: _obscureConfirmPassword,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.texto),
                       decoration: InputDecoration(
                         labelText: 'Confirmar contraseña',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                        labelStyle: TextStyle(color: AppColors.textoSecundario),
+                        prefixIcon: Icon(Icons.lock, color: AppColors.textoSecundario),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12)),
                         errorText:
@@ -231,7 +232,7 @@ Future<void> seleccionarImagen() async {
                             _obscureConfirmPassword
                                 ? Icons.visibility
                                 : Icons.visibility_off,
-                            color: Colors.white70,
+                            color: AppColors.textoSecundario,
                           ),
                           onPressed: () {
                             setState(() {
@@ -249,7 +250,6 @@ Future<void> seleccionarImagen() async {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
                           padding: EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
@@ -326,7 +326,7 @@ Future<void> seleccionarImagen() async {
                       child: Text(
                         'Volver al inicio de sesión',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textoSecundario,
                           fontSize: 16,
                           decoration: TextDecoration.underline,
                         ),

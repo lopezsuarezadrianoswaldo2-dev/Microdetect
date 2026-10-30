@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -76,7 +77,7 @@ final ImageProvider? profileImage = _imageFile != null
                               _confirmarCambioFoto(uid),
                           child: CircleAvatar(
                             radius: 20,
-                            backgroundColor: Colors.blue,
+                            backgroundColor: AppColors.primario,
                             child: const Icon(
                               Icons.camera_alt,
                               color: Colors.white,
@@ -160,7 +161,7 @@ final ImageProvider? profileImage = _imageFile != null
               right: 20,
               child: IconButton(
                 icon: const Icon(Icons.close,
-                    color: Colors.white, size: 30),
+                    color: AppColors.texto, size: 30),
                 onPressed: () => Navigator.pop(context),
               ),
             )
@@ -212,7 +213,7 @@ final ImageProvider? profileImage = _imageFile != null
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Ajustar imagen',
-            toolbarColor: Colors.blue,
+            toolbarColor: AppColors.primario,
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: false,
           ),

@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -21,7 +22,7 @@ class GraficaPageBonita extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.blue,
+        backgroundColor: AppColors.primario,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -76,11 +77,11 @@ class GraficaPageBonita extends StatelessWidget {
               LineChartBarData(
                 isCurved: true,
                 barWidth: 4,
-                color: Colors.blueAccent,
+                color: AppColors.primario,
                 dotData: FlDotData(show: true),
                 belowBarData: BarAreaData(
                   show: true,
-                  color: Colors.blue.withOpacity(0.2),
+                  color: AppColors.primario.withOpacity(0.2),
                 ),
 
                 // IMPORTANTÍSIMO:

@@ -1,11 +1,39 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as img;
 import 'services/colonia_counter.dart';
 import 'services/plan_service.dart';
 import 'planes_page.dart';
+
+/// Reduce la foto para que quepa en un documento de Firestore (límite de
+/// 1 MB por documento). Se ejecuta en otro hilo para no congelar la pantalla.
+Uint8List _comprimirParaFirestore(Uint8List bytes) {
+  final img.Image? original = img.decodeImage(bytes);
+  if (original == null) {
+    throw Exception('No se pudo leer la imagen.');
+  }
+
+  const List<int> anchos = [900, 700, 500, 350];
+  Uint8List resultado = bytes;
+
+  for (final int ancho in anchos) {
+    final img.Image reducida = original.width > ancho
+        ? img.copyResize(original, width: ancho)
+        : original;
+    resultado = Uint8List.fromList(img.encodeJpg(reducida, quality: 70));
+
+    // 600 KB en bytes ≈ 800 KB en texto base64: queda margen bajo el límite.
+    if (resultado.length <= 600000) break;
+  }
+
+  return resultado;
+}
 
 class NuevoReportePage extends StatefulWidget {
   final File imagen;
@@ -51,24 +79,24 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1B263B),
+          backgroundColor: AppColors.tarjeta,
           title: Row(
             children: const [
               Icon(Icons.auto_awesome, color: Colors.amber),
               SizedBox(width: 10),
-              Text('Función Premium', style: TextStyle(color: Colors.white)),
+              Text('Función Premium', style: TextStyle(color: AppColors.texto)),
             ],
           ),
           content: const Text(
             'El análisis con Inteligencia Artificial solo está disponible '
             'en el paquete Premium.',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: AppColors.textoSecundario),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cerrar',
-                  style: TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: AppColors.textoSecundario)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -78,9 +106,6 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                   MaterialPageRoute(builder: (_) => const PlanesPage()),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF415A77),
-              ),
               child: const Text('Ver paquetes',
                   style: TextStyle(color: Colors.white)),
             ),
@@ -108,13 +133,14 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       final tempFile = File(tempPath);
       await tempFile.writeAsBytes(resultado.imagenProcesada);
 
+      if (!mounted) return;
       setState(() {
         _conteo = resultado.conteo;
         _imagenMarcadaTemp = tempFile;
         _procesando = false;
       });
     } catch (e) {
-      setState(() => _procesando = false);
+      if (mounted) setState(() => _procesando = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al analizar la imagen: $e')),
@@ -139,34 +165,25 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       final numeroReporte = 'R-${now.millisecondsSinceEpoch}';
 
       // ============================================================
-      // 1) GUARDAR LA IMAGEN EN UNA CARPETA PERMANENTE DEL CELULAR
-      //    (no en Firebase Storage, para no depender de un plan
-      //    de pago). La app siempre puede acceder a esta carpeta.
+      // 1) PREPARAR LA IMAGEN
+      //    Se reduce y se convierte a texto (base64) para guardarla
+      //    dentro del mismo documento del reporte en Firestore, sin
+      //    usar Firebase Storage (que es de pago).
       // ============================================================
-      debugPrint('[REPORTE] 1) Guardando imagen localmente...');
-
-      final Directory carpetaApp = await getApplicationDocumentsDirectory();
-
-      final Directory carpetaReportes =
-          Directory('${carpetaApp.path}/reportes_fotos');
-
-      if (!await carpetaReportes.exists()) {
-        await carpetaReportes.create(recursive: true);
-      }
+      debugPrint('[REPORTE] 1) Preparando imagen...');
 
       final File imagenOriginal = _imagenMarcadaTemp ?? widget.imagen;
+      final Uint8List bytesOriginales = await imagenOriginal.readAsBytes();
+      final Uint8List bytesComprimidos =
+          await compute(_comprimirParaFirestore, bytesOriginales);
+      final String imagenBase64 = base64Encode(bytesComprimidos);
 
-      final String rutaFinal =
-          '${carpetaReportes.path}/$numeroReporte.jpg';
-
-      final File imagenGuardada = await imagenOriginal.copy(rutaFinal);
-
-      debugPrint('[REPORTE] 2) Imagen guardada en: ${imagenGuardada.path}');
+      debugPrint(
+          '[REPORTE] 2) Imagen lista: ${(bytesComprimidos.length / 1024).round()} KB');
 
       // ============================================================
-      // 2) GUARDAR EL REPORTE EN FIRESTORE
-      //    El campo "imageUrl" ahora guarda la RUTA LOCAL del
-      //    archivo en este celular (no una URL de internet).
+      // 2) GUARDAR EL REPORTE COMPLETO EN FIRESTORE
+      //    El campo "imagenBase64" contiene la foto marcada.
       // ============================================================
       debugPrint('[REPORTE] 3) Guardando documento en Firestore...');
 
@@ -177,12 +194,12 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
         'descripcion': _descripcionController.text.trim(),
         'fecha': fecha,
         'hora': hora,
-        'imageUrl': imagenGuardada.path, // ruta local, no URL de internet
+        'imagenBase64': imagenBase64,
         'creado': FieldValue.serverTimestamp(),
       }).timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 30),
         onTimeout: () => throw Exception(
-            'Tiempo agotado guardando en Firestore (15s). Revisa las reglas de seguridad de Firestore.'),
+            'Tiempo agotado guardando en Firestore (30s). Revisa tu internet y las reglas de seguridad de Firestore.'),
       );
 
       debugPrint('[REPORTE] 4) ¡Guardado con éxito!');
@@ -208,23 +225,23 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title:
-            const Text('Nuevo reporte', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+            const Text('Nuevo reporte', style: TextStyle(color: AppColors.texto)),
+        iconTheme: const IconThemeData(color: AppColors.texto),
       ),
       body: _procesando
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: Colors.white),
+                  CircularProgressIndicator(color: AppColors.texto),
                   SizedBox(height: 20),
                   Text('Analizando la imagen y contando colonias...',
-                      style: TextStyle(color: Colors.white70)),
+                      style: TextStyle(color: AppColors.textoSecundario)),
                 ],
               ),
             )
@@ -246,23 +263,23 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1B263B),
+                      color: AppColors.tarjeta,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.biotech,
-                            color: Colors.white, size: 32),
+                            color: AppColors.texto, size: 32),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text('Conteo automático',
                                 style: TextStyle(
-                                    color: Colors.white70, fontSize: 14)),
+                                    color: AppColors.textoSecundario, fontSize: 14)),
                             Text('$_conteo colonias detectadas',
                                 style: const TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.texto,
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold)),
                           ],
@@ -286,7 +303,7 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                       ),
                       label: const Text(
                         'Análisis con IA (Premium)',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(color: AppColors.texto),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.amber),
@@ -300,17 +317,17 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
 
                   const SizedBox(height: 20),
                   const Text('Descripción (opcional)',
-                      style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      style: TextStyle(color: AppColors.textoSecundario, fontSize: 14)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _descripcionController,
                     maxLines: 3,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: AppColors.texto),
                     decoration: InputDecoration(
                       hintText: 'Ej. Muestra tomada a las 24h de incubación...',
-                      hintStyle: const TextStyle(color: Colors.white38),
+                      hintStyle: const TextStyle(color: AppColors.textoTenue),
                       filled: true,
-                      fillColor: const Color(0xFF1B263B),
+                      fillColor: AppColors.tarjeta,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -323,7 +340,6 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                     child: ElevatedButton(
                       onPressed: _guardando ? null : _guardarReporte,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF415A77),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),

@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:bioconteo_colonias_bacterinas/services/plan_service.dart';
 import 'package:bioconteo_colonias_bacterinas/planes_page.dart';
 import 'dart:io';
@@ -24,22 +25,22 @@ class _HomePanelState extends State<HomePanel> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1B263B),
+        backgroundColor: AppColors.tarjeta,
         title: Row(children: const [
-          Icon(Icons.lock, color: Colors.white70),
+          Icon(Icons.lock, color: AppColors.textoSecundario),
           SizedBox(width: 10),
-          Text('Función bloqueada', style: TextStyle(color: Colors.white)),
+          Text('Función bloqueada', style: TextStyle(color: AppColors.texto)),
         ]),
         content: Text(
           '$funcion no está disponible en tu paquete actual '
           '(${_planActual.nombre}). Cambia de paquete para desbloquearla.',
-          style: const TextStyle(color: Colors.white70),
+          style: const TextStyle(color: AppColors.textoSecundario),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child:
-                const Text('Cerrar', style: TextStyle(color: Colors.white54)),
+                const Text('Cerrar', style: TextStyle(color: AppColors.textoSecundario)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -47,8 +48,6 @@ class _HomePanelState extends State<HomePanel> {
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const PlanesPage()));
             },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF415A77)),
             child: const Text('Ver paquetes',
                 style: TextStyle(color: Colors.white)),
           ),
@@ -60,6 +59,8 @@ class _HomePanelState extends State<HomePanel> {
   Future<void> seleccionarImagen(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? imagen = await picker.pickImage(source: source);
+
+    if (!mounted) return; // evita usar context si la pantalla ya no existe
 
     if (imagen != null) {
       Navigator.push(
@@ -101,7 +102,7 @@ class _HomePanelState extends State<HomePanel> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: AppColors.texto,
                     ),
                   ),
 
@@ -116,7 +117,7 @@ class _HomePanelState extends State<HomePanel> {
                     child: Container(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: Color(0xFF0D1B2A),
+                        color: AppColors.primario,
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Row(
@@ -144,7 +145,7 @@ class _HomePanelState extends State<HomePanel> {
                     child: Container(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: Color(0xFF415A77),
+                        color: AppColors.hover,
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Row(
@@ -169,7 +170,7 @@ class _HomePanelState extends State<HomePanel> {
                     onPressed: () => Navigator.pop(context),
                     child: Text(
                       "Cancelar",
-                      style: TextStyle(fontSize: 16, color: Colors.black54),
+                      style: TextStyle(fontSize: 16, color: AppColors.textoSecundario),
                     ),
                   )
                 ],
@@ -211,19 +212,19 @@ class _HomePanelState extends State<HomePanel> {
     required bool graficasDisponibles,
   }) {
     return Scaffold(
-      backgroundColor: Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           "Contador de Bacterias",
-          style: TextStyle(fontSize: 22, color: Colors.white),
+          style: TextStyle(fontSize: 22, color: AppColors.texto),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.workspace_premium, color: Colors.white),
+            icon: const Icon(Icons.workspace_premium, color: AppColors.texto),
             tooltip: 'Mis paquetes',
             onPressed: () {
               Navigator.push(
@@ -233,7 +234,7 @@ class _HomePanelState extends State<HomePanel> {
             },
           ),
           IconButton(
-            icon: Icon(Icons.logout, color: Colors.white),
+            icon: Icon(Icons.logout, color: AppColors.texto),
             onPressed: () {
               Navigator.pushReplacement(
                 context,
@@ -253,7 +254,7 @@ class _HomePanelState extends State<HomePanel> {
               Center(
                 child: Text(
                   "Analiza aquí tu imagen",
-                  style: TextStyle(color: Colors.white70, fontSize: 18),
+                  style: TextStyle(color: AppColors.textoSecundario, fontSize: 18),
                 ),
               ),
             ],
@@ -268,7 +269,7 @@ class _HomePanelState extends State<HomePanel> {
               child: Container(
                 padding: EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white10,
+                  color: AppColors.primario,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -284,20 +285,23 @@ class _HomePanelState extends State<HomePanel> {
 
       // ★★★★★ BOTTOM BAR — CON BLOQUEO POR PAQUETE ★★★★★
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Color(0xFF1B263B),
+        backgroundColor: AppColors.tarjeta,
 
         // Misma apariencia siempre
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white,
+        selectedItemColor: AppColors.primario,
+        unselectedItemColor: AppColors.textoSecundario,
 
         // Para que no use animación de shifting
         type: BottomNavigationBarType.fixed,
 
         currentIndex: currentIndex,
-        onTap: (index) {
+
+        // ★ CORREGIDO: ahora es async y al regresar de cada pantalla
+        //   la barra vuelve a marcar "Inicio" (índice 0).
+        onTap: (index) async {
           // Índice 0: Inicio — siempre disponible
           if (index == 0) {
-            setState(() => currentIndex = index);
+            setState(() => currentIndex = 0);
             print("Inicio");
             return;
           }
@@ -308,21 +312,23 @@ class _HomePanelState extends State<HomePanel> {
               _mostrarBloqueado('El historial');
               return;
             }
-            setState(() => currentIndex = index);
-            Navigator.push(
+            setState(() => currentIndex = 1);
+            await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => HistorialPage()),
             );
+            if (mounted) setState(() => currentIndex = 0);
             return;
           }
 
           // Índice 2: Perfil — siempre disponible
           if (index == 2) {
-            setState(() => currentIndex = index);
-            Navigator.push(
+            setState(() => currentIndex = 2);
+            await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => Perfil()),
             );
+            if (mounted) setState(() => currentIndex = 0);
             return;
           }
 
@@ -332,11 +338,12 @@ class _HomePanelState extends State<HomePanel> {
               _mostrarBloqueado('Las gráficas');
               return;
             }
-            setState(() => currentIndex = index);
-            Navigator.push(
+            setState(() => currentIndex = 3);
+            await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => GraficaPageBonita()),
             );
+            if (mounted) setState(() => currentIndex = 0);
             return;
           }
         },

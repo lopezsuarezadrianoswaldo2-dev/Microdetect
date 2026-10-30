@@ -1,21 +1,22 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'services/plan_service.dart';
 import 'pago_simulado_page.dart';
 
 class PlanesPage extends StatelessWidget {
-  const PlanesPage({Key? key}) : super(key: key);
+  const PlanesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.texto),
         title: const Text(
           'Paquetes disponibles',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: AppColors.texto),
         ),
         centerTitle: true,
       ),
@@ -30,7 +31,7 @@ class PlanesPage extends StatelessWidget {
               const Text(
                 'Elige el paquete que mejor se ajuste a lo que necesitas. '
                 'Puedes cambiar de paquete cuando quieras.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: AppColors.textoSecundario, fontSize: 14),
               ),
               const SizedBox(height: 20),
               _tarjetaPlan(
@@ -67,7 +68,7 @@ class PlanesPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B263B),
+        color: AppColors.tarjeta,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: destacado ? const Color(0xFFE0A106) : Colors.transparent,
@@ -82,7 +83,7 @@ class PlanesPage extends StatelessWidget {
               Text(
                 plan.nombre,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.texto,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -93,12 +94,12 @@ class PlanesPage extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.greenAccent.withOpacity(0.15),
+                    color: Colors.green.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
                     'Plan actual',
-                    style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                    style: TextStyle(color: Colors.green, fontSize: 12),
                   ),
                 ),
               ],
@@ -107,7 +108,7 @@ class PlanesPage extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             plan.precioReferencia,
-            style: const TextStyle(color: Colors.white54, fontSize: 14),
+            style: const TextStyle(color: AppColors.textoSecundario, fontSize: 14),
           ),
           const SizedBox(height: 14),
           ...plan.caracteristicas.map(
@@ -117,13 +118,13 @@ class PlanesPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.check_circle,
-                      color: Colors.white70, size: 18),
+                      color: AppColors.textoSecundario, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       c,
                       style: const TextStyle(
-                          color: Colors.white70, fontSize: 14),
+                          color: AppColors.textoSecundario, fontSize: 14),
                     ),
                   ),
                 ],
@@ -140,13 +141,16 @@ class PlanesPage extends StatelessWidget {
                       // El plan Básico es gratis, así que se cambia directo,
                       // sin pasar por la pantalla de pago.
                       if (plan == AppPlan.basico) {
-                        await PlanService.cambiarPlan(plan);
+                        String mensaje;
+                        try {
+                          await PlanService.cambiarPlan(plan);
+                          mensaje = 'Ahora tienes el plan ${plan.nombre} ✅';
+                        } catch (e) {
+                          mensaje = 'No se pudo cambiar de plan: $e';
+                        }
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Ahora tienes el plan ${plan.nombre} ✅'),
-                            ),
+                            SnackBar(content: Text(mensaje)),
                           );
                         }
                         return;
@@ -164,7 +168,7 @@ class PlanesPage extends StatelessWidget {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor:
-                    esActual ? Colors.white10 : const Color(0xFF415A77),
+                    esActual ? Colors.grey.shade400 : null,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

@@ -1,3 +1,4 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class EditarCampoPage extends StatefulWidget {
@@ -22,13 +23,13 @@ class _EditarCampoPageState extends State<EditarCampoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(widget.titulo, style: TextStyle(color: Colors.white)),
-        iconTheme: IconThemeData(color: Colors.white),
+        title: Text(widget.titulo, style: TextStyle(color: AppColors.texto)),
+        iconTheme: IconThemeData(color: AppColors.texto),
       ),
 
       body: Padding(
@@ -37,12 +38,12 @@ class _EditarCampoPageState extends State<EditarCampoPage> {
           children: [
             TextField(
               controller: controller,
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(color: AppColors.texto),
               decoration: InputDecoration(
                 labelText: "Nuevo valor",
-                labelStyle: TextStyle(color: Colors.white70),
+                labelStyle: TextStyle(color: AppColors.textoSecundario),
                 filled: true,
-                fillColor: Color(0xFF1B263B),
+                fillColor: AppColors.tarjeta,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),

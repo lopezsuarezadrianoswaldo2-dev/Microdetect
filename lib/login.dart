@@ -1,6 +1,6 @@
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:bioconteo_colonias_bacterinas/home_panel.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registro.dart';
 
@@ -63,7 +63,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0D1B2A),
+      backgroundColor: AppColors.fondo,
  body: SingleChildScrollView(
   child: Center(
     child: Padding(
@@ -82,22 +82,18 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
               scale: _animation,
               child: Column(
                 children: [
-                  Image.asset('assets/images/logo.png', width: 150, height: 150),
-                  SizedBox(height: 20),
-                  Text(
-                    'BioConteo de Colonias Bacterianas',
-                     textAlign: TextAlign.center, 
-                    style: GoogleFonts.orbitron(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 2,
-                    ),
+                  Image.asset(
+                    'assets/images/micro.png',
+                    width: 200,
+                    height: 200,
+                    // Funde el fondo del logo con el fondo de la app (quítalo si tu logo ya es PNG transparente)
+                    color: AppColors.fondo,
+                    colorBlendMode: BlendMode.darken,
                   ),
                   SizedBox(height: 8),
                   Text(
                     '¡Bienvenidos!',
-                    style: TextStyle(fontSize: 20, color: Colors.white70),
+                    style: TextStyle(fontSize: 20, color: AppColors.textoSecundario),
                   ),
                 ],
               ),
@@ -109,13 +105,13 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
             TextFormField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(color: AppColors.texto),
               decoration: InputDecoration(
                 labelText: 'Correo electrónico',
-                labelStyle: TextStyle(color: Colors.white70),
-                prefixIcon: Icon(Icons.email, color: Colors.white70),
+                labelStyle: TextStyle(color: AppColors.textoSecundario),
+                prefixIcon: Icon(Icons.email, color: AppColors.textoSecundario),
                 filled: true,
-                fillColor: Colors.white10,
+                fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -125,14 +121,14 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
        TextFormField(
                       controller: passwordController,
                       obscureText: _obscurePassword,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.texto),
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
-                        labelStyle: TextStyle(color: Colors.white70),
+                        labelStyle: TextStyle(color: AppColors.textoSecundario),
                         prefixIcon:
-                            Icon(Icons.lock, color: Colors.white70),
+                            Icon(Icons.lock, color: AppColors.textoSecundario),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12)),
 
@@ -142,7 +138,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                             _obscurePassword
                                 ? Icons.visibility
                                 : Icons.visibility_off,
-                            color: Colors.white70,
+                            color: AppColors.textoSecundario,
                           ),
                           onPressed: () {
                             setState(() {
@@ -160,7 +156,6 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
                   padding: EdgeInsets.symmetric(vertical: 15),
                 ),
                 onPressed: () async {
@@ -209,14 +204,25 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                   MaterialPageRoute(builder: (_) => Registro()),
                 );
               },
-              child: Text(
-                '¿Aún no tienes cuenta? Regístrate aquí',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  decoration: TextDecoration.underline,
-                   ),
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    color: AppColors.textoSecundario,
+                    fontSize: 16,
+                  ),
+                  children: [
+                    TextSpan(text: '¿Aún no tienes cuenta? '),
+                    TextSpan(
+                      text: 'Regístrate aquí',
+                      style: TextStyle(
+                        color: AppColors.primario,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
                       ),
+                    ),
+                  ],
+                ),
+              ),
                     ),
                   ],
                 ),
