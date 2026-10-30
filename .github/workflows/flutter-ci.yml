@@ -1,0 +1,59 @@
+
+name: Flutter CI - MicroDetect
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Verificar y compilar aplicación
+    runs-on: ubuntu-latest
+
+    steps:
+      # Obtener el código del repositorio
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      # Configurar Java
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Instalar Flutter
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Instalar dependencias
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      # Revisar el código
+      - name: Analizar codigo
+        run: flutter analyze
+
+      # Ejecutar pruebas
+      - name: Ejecutar pruebas
+        run: flutter test
+
+      # Generar APK
+      - name: Compilar APK
+        run: flutter build apk --debug
+
+      # Guardar el APK
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroDetect-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
