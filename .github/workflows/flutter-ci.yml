@@ -2,39 +2,74 @@
 
 on:
   push:
-    branches: [ main, develop_adrian ]
+    branches: [ main, develop ]
   pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
-  compilación:
+  # 1) Verificación del código: este job es el que debe quedar en verde
+  verificar:
+    name: Verificar código
     runs-on: ubuntu-latest
+
     steps:
-      - name: Descargar código
+      - name: Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar Java 17
+      - name: Instalar Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          channel: 'stable'
           cache: true
 
       - name: Instalar dependencias
         run: flutter pub get
 
       - name: Analizar código
-        run: flutter analyze
-        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Ejecutar pruebas
+      - name: Correr pruebas
         run: flutter test
-        continue-on-error: true
 
-      # APK desactivado temporalmente mientras se corrige Gradle
-      # - name: Compilar APK
-      #   run: flutter build apk --release
+  # 2) Compilación del APK: job aparte, temporalmente no bloquea el check
+  apk:
+    name: Compilar APK
+    needs: verificar
+    runs-on: ubuntu-latest
+    continue-on-error: true   # TEMPORAL: quitar cuando el build del APK ya pase
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Compilar APK (debug)
+        run: flutter build apk --debug
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroDetect-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
