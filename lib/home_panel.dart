@@ -7,6 +7,7 @@ import 'package:bioconteo_colonias_bacterinas/historial_page.dart';
 import 'package:bioconteo_colonias_bacterinas/perfil.dart';
 import 'package:bioconteo_colonias_bacterinas/services/graficaspage.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login.dart'; // ← IMPORTANTE para regresar al login
 
@@ -223,6 +224,20 @@ class _HomePanelState extends State<HomePanel> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report, color: AppColors.texto),
+            tooltip: 'Probar Crashlytics',
+            onPressed: () {
+              FirebaseCrashlytics.instance.recordError(
+                Exception('Error de prueba para Crashlytics'),
+                StackTrace.current,
+                reason: 'Prueba manual',
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Error de prueba enviado')),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.workspace_premium, color: AppColors.texto),
             tooltip: 'Mis paquetes',

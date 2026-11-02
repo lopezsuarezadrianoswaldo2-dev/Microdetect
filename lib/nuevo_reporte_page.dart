@@ -10,6 +10,8 @@ import 'package:image/image.dart' as img;
 import 'services/colonia_counter.dart';
 import 'services/plan_service.dart';
 import 'planes_page.dart';
+import 'package:firebase_performance/firebase_performance.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Reduce la foto para que quepa en un documento de Firestore (límite de
 /// 1 MB por documento). Se ejecuta en otro hilo para no congelar la pantalla.
@@ -57,6 +59,12 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
     super.initState();
     _procesarImagen();
     _cargarPlan();
+  }
+
+  @override
+  void dispose() {
+    _descripcionController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarPlan() async {
@@ -123,7 +131,16 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
     );
   }
 
+  // ============================================================
+  // ANÁLISIS DE IMAGEN (conteo de colonias)
+  //  - Rendimiento: traza personalizada "analisis_imagen".
+  //  - Estabilidad: si falla, se registra en Crashlytics con la
+  //    etiqueta funcionalidad = analisis_imagen.
+  // ============================================================
   Future<void> _procesarImagen() async {
+    final trace = FirebasePerformance.instance.newTrace('analisis_imagen');
+    await trace.start();
+
     try {
       final resultado = await ColoniaCounter.contar(widget.imagen);
 
@@ -133,19 +150,34 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       final tempFile = File(tempPath);
       await tempFile.writeAsBytes(resultado.imagenProcesada);
 
+      trace.putAttribute('resultado', 'exito');
+      trace.setMetric('colonias_detectadas', resultado.conteo);
+
       if (!mounted) return;
       setState(() {
         _conteo = resultado.conteo;
         _imagenMarcadaTemp = tempFile;
         _procesando = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      trace.putAttribute('resultado', 'error');
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .setCustomKey('funcionalidad', 'analisis_imagen');
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          st,
+          reason: 'Error al analizar imagen',
+        );
+      }
       if (mounted) setState(() => _procesando = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al analizar la imagen: $e')),
         );
       }
+    } finally {
+      await trace.stop();
     }
   }
 
@@ -154,6 +186,9 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
     if (user == null) return;
 
     setState(() => _guardando = true);
+
+    final trace = FirebasePerformance.instance.newTrace('guardar_reporte');
+    await trace.start();
 
     try {
       final now = DateTime.now();
@@ -203,6 +238,7 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       );
 
       debugPrint('[REPORTE] 4) ¡Guardado con éxito!');
+      trace.putAttribute('resultado', 'exito');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -212,12 +248,23 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       }
     } catch (e) {
       debugPrint('[REPORTE] ❌ ERROR AL GUARDAR: $e');
+      trace.putAttribute('resultado', 'error');
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .setCustomKey('funcionalidad', 'guardado_reporte');
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          StackTrace.current,
+          reason: 'Error al guardar reporte',
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar el reporte: $e')),
         );
       }
     } finally {
+      await trace.stop();
       if (mounted) setState(() => _guardando = false);
     }
   }
