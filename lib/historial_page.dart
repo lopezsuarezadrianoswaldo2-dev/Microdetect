@@ -1,15 +1,57 @@
 import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_performance/firebase_performance.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'detalles_page.dart';
 import 'services/auth_wrapper.dart';
 
-class HistorialPage extends StatelessWidget {
+class HistorialPage extends StatefulWidget {
   const HistorialPage({super.key});
+
+  @override
+  State<HistorialPage> createState() => _HistorialPageState();
+}
+
+class _HistorialPageState extends State<HistorialPage> {
+  // ============================================================
+  // RENDIMIENTO: traza personalizada "consulta_historial".
+  // Arranca al abrir la pantalla y se detiene cuando Firestore
+  // entrega los reportes (o cuando ocurre un error).
+  // ============================================================
+  Trace? _trazaConsulta;
+  bool _trazaTerminada = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      _trazaConsulta =
+          FirebasePerformance.instance.newTrace('consulta_historial');
+      _trazaConsulta!.start();
+    }
+  }
+
+  @override
+  void dispose() {
+    // Si el usuario sale antes de que lleguen los datos, se cierra la traza.
+    _terminarTraza('cancelado');
+    super.dispose();
+  }
+
+  void _terminarTraza(String resultado, {int? reportes}) {
+    if (_trazaTerminada || _trazaConsulta == null) return;
+    _trazaTerminada = true;
+    _trazaConsulta!.putAttribute('resultado', resultado);
+    if (reportes != null) {
+      _trazaConsulta!.setMetric('reportes_cargados', reportes);
+    }
+    _trazaConsulta!.stop();
+  }
 
   // Cierra la sesión de Firebase de verdad y regresa al AuthWrapper,
   // que decide solo si mostrar Login o Home.
@@ -96,6 +138,18 @@ class HistorialPage extends StatelessWidget {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
+                          // Rendimiento: se cierra la traza marcándola con error.
+                          _terminarTraza('error');
+                          // Estabilidad: se registra con la funcionalidad afectada.
+                          if (!kIsWeb) {
+                            FirebaseCrashlytics.instance.setCustomKey(
+                                'funcionalidad', 'consulta_historial');
+                            FirebaseCrashlytics.instance.recordError(
+                              snapshot.error!,
+                              StackTrace.current,
+                              reason: 'Error al cargar el historial',
+                            );
+                          }
                           return Center(
                             child: Text(
                               'Error al cargar el historial:\n${snapshot.error}',
@@ -116,6 +170,9 @@ class HistorialPage extends StatelessWidget {
 
                         final docs = [...(snapshot.data?.docs ?? [])];
                         docs.sort((a, b) => _creadoMs(b).compareTo(_creadoMs(a)));
+
+                        // Rendimiento: ya llegaron los reportes, se cierra la traza.
+                        _terminarTraza('exito', reportes: docs.length);
 
                         if (docs.isEmpty) {
                           return const Center(

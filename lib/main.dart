@@ -1,7 +1,10 @@
 import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:bioconteo_colonias_bacterinas/services/splash_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_performance/firebase_performance.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +25,23 @@ void main() async {
     debugPrint("Error al inicializar Firebase: $e");
   }
 
+  // Crashlytics y Performance solo funcionan en Android/iOS (no en web)
+  if (!kIsWeb) {
+    // Activar la recolección también en modo debug (para poder probar)
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+    await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+
+    // Errores de Flutter -> Crashlytics
+    FlutterError.onError =
+        FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+    // Errores asíncronos fuera de Flutter -> Crashlytics
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  }
+
   runApp(const MyApp());
 }
 
@@ -33,8 +53,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.tema,
-
-      // 🔥 PRIMERA PANTALLA
       home: const SplashScreen(),
     );
   }

@@ -3,6 +3,8 @@ plugins {
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
     id "com.google.gms.google-services"
+    id "com.google.firebase.crashlytics"
+    id "com.google.firebase.firebase-perf"
 }
 
 def localProperties = new Properties()
@@ -25,7 +27,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.example.bioconteo_colonias_bacterinas"
-     compileSdkVersion 34 // Forzar SDK 34
+     compileSdkVersion 37 // Forzar SDK 34
      ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -53,12 +55,12 @@ android {
 
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
-        }
+    release {
+        signingConfig signingConfigs.debug
+        minifyEnabled false
+        shrinkResources false
     }
+}
 }
 
 flutter {
