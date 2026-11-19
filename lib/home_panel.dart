@@ -1,16 +1,19 @@
-import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
-import 'package:bioconteo_colonias_bacterinas/services/plan_service.dart';
-import 'package:bioconteo_colonias_bacterinas/planes_page.dart';
 import 'dart:io';
-import 'nuevo_reporte_page.dart';
+
+import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:bioconteo_colonias_bacterinas/historial_page.dart';
 import 'package:bioconteo_colonias_bacterinas/perfil.dart';
+import 'package:bioconteo_colonias_bacterinas/planes_page.dart';
+import 'package:bioconteo_colonias_bacterinas/services/auth_wrapper.dart';
+import 'package:bioconteo_colonias_bacterinas/services/dialogos_plan.dart';
 import 'package:bioconteo_colonias_bacterinas/services/graficaspage.dart';
+import 'package:bioconteo_colonias_bacterinas/services/plan_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:image_picker/image_picker.dart';
-import 'login.dart'; // ← IMPORTANTE para regresar al login
 
+import 'nuevo_reporte_page.dart';
 
 class HomePanel extends StatefulWidget {
   @override
@@ -20,7 +23,103 @@ class HomePanel extends StatefulWidget {
 class _HomePanelState extends State<HomePanel> {
   int currentIndex = 0;
 
-  AppPlan _planActual = AppPlan.basico;
+  // Se crea una sola vez para que el StreamBuilder no se reconecte
+  // en cada rebuild.
+  late final Stream<EstadoPlan> _estadoStream;
+  EstadoPlan _estado = EstadoPlan.porDefecto;
+  bool _revisandoPrueba = false;
+
+  AppPlan get _planActual => _estado.planEfectivo;
+
+  @override
+  void initState() {
+    super.initState();
+    _estadoStream = PlanService.estadoPlanStream();
+
+    // Al entrar por primera vez (ya con sesión iniciada) se activa la prueba Premium.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revisarPruebaPremium());
+  }
+
+  // ============================================================
+  // PRUEBA PREMIUM AUTOMÁTICA (15 días gratis)
+  //  - Usuario que nunca tuvo prueba: se activa SOLA y se le da la
+  //    bienvenida (como Spotify o YouTube Premium).
+  //  - Prueba vencida: se le avisa una sola vez y se le invita a
+  //    contratar un paquete; si no, queda en su paquete (Básico).
+  // El estado vive en Firestore (usuarios/{uid}.pruebaPremiumEstado),
+  // así que cada cuenta recibe la prueba una sola vez.
+  // ============================================================
+  /// Espera a que el Home sea de verdad la pantalla que ve el usuario
+  /// (sesión iniciada y sin otra pantalla encima, como Login o Registro).
+  /// Devuelve false si el Home se cierra antes o pasa demasiado tiempo.
+  Future<bool> _esperarPantallaVisible() async {
+    for (int i = 0; i < 60; i++) {
+      if (!mounted) return false;
+
+      final ModalRoute<dynamic>? ruta = ModalRoute.of(context);
+      final bool visible = (ruta?.isCurrent ?? false) &&
+          FirebaseAuth.instance.currentUser != null;
+
+      if (visible) {
+        // Pequeña pausa para que termine la transición de pantalla.
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (!mounted) return false;
+        return (ModalRoute.of(context)?.isCurrent ?? false) &&
+            FirebaseAuth.instance.currentUser != null;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+    return false;
+  }
+
+  Future<void> _revisarPruebaPremium() async {
+    if (_revisandoPrueba) return;
+    _revisandoPrueba = true;
+
+    try {
+      // El aviso solo sale ya con la sesión iniciada y el Home a la vista,
+      // nunca encima del Login, el Registro o el logo.
+      if (!await _esperarPantallaVisible()) return;
+
+      final EstadoPlan estado = await PlanService.obtenerEstado();
+      if (!mounted) return;
+
+      // Ya es Premium de pago: no necesita prueba.
+      if (estado.planBase == AppPlan.premium) return;
+
+      // 1) Prueba vencida: aviso de fin.
+      if (estado.pruebaVencidaSinAviso) {
+        await PlanService.marcarPruebaTerminada();
+        if (!mounted) return;
+        final bool verPaquetes = await mostrarDialogoFinPrueba(context);
+        if (verPaquetes && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PlanesPage()),
+          );
+        }
+        return;
+      }
+
+      // 2) Cuenta que nunca recibió la prueba: se activa automáticamente.
+      if (estado.pruebaEstado == null) {
+        final bool activada = await PlanService.aceptarPruebaPremium();
+        if (activada && mounted) {
+          await mostrarDialogoBienvenidaPrueba(context);
+        }
+      }
+    } catch (e) {
+      debugPrint('[PRUEBA PREMIUM] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo revisar la prueba Premium: $e')),
+        );
+      }
+    } finally {
+      _revisandoPrueba = false;
+    }
+  }
 
   void _mostrarBloqueado(String funcion) {
     showDialog(
@@ -40,8 +139,8 @@ class _HomePanelState extends State<HomePanel> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child:
-                const Text('Cerrar', style: TextStyle(color: AppColors.textoSecundario)),
+            child: const Text('Cerrar',
+                style: TextStyle(color: AppColors.textoSecundario)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -55,6 +154,29 @@ class _HomePanelState extends State<HomePanel> {
         ],
       ),
     );
+  }
+
+  // ============================================================
+  // SUBIR IMAGEN: primero se revisa el límite del paquete.
+  //   Básico: 3  |  Intermedio: 6  |  Premium (o prueba): sin límite
+  // ============================================================
+  Future<void> _intentarSubirImagen() async {
+    final EstadoPlan estado = await PlanService.obtenerEstado();
+    if (!mounted) return;
+
+    if (!estado.puedeSubirImagen) {
+      final bool verPaquetes =
+          await mostrarDialogoLimiteImagenes(context, estado);
+      if (verPaquetes && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PlanesPage()),
+        );
+      }
+      return;
+    }
+
+    mostrarOpcionesImagen();
   }
 
   Future<void> seleccionarImagen(ImageSource source) async {
@@ -171,7 +293,8 @@ class _HomePanelState extends State<HomePanel> {
                     onPressed: () => Navigator.pop(context),
                     child: Text(
                       "Cancelar",
-                      style: TextStyle(fontSize: 16, color: AppColors.textoSecundario),
+                      style: TextStyle(
+                          fontSize: 16, color: AppColors.textoSecundario),
                     ),
                   )
                 ],
@@ -183,16 +306,29 @@ class _HomePanelState extends State<HomePanel> {
     );
   }
 
+  // Cierra la sesión de Firebase de verdad y regresa al AuthWrapper,
+  // que decide solo si mostrar Login o Home.
+  Future<void> _cerrarSesion() async {
+    final NavigatorState navigator = Navigator.of(context);
+    await FirebaseAuth.instance.signOut();
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthWrapper()),
+      (route) => false,
+    );
+  }
+
   // ============================================================
-  // build() ahora escucha el plan del usuario en tiempo real y le
-  // pasa a _buildScaffold si Historial/Gráficas están disponibles.
+  // build() escucha el plan del usuario en tiempo real y le pasa a
+  // _buildScaffold si Historial/Gráficas están disponibles.
+  // Durante la prueba Premium, el plan efectivo es Premium.
   // ============================================================
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AppPlan>(
-      stream: PlanService.planActualStream(),
+    return StreamBuilder<EstadoPlan>(
+      stream: _estadoStream,
       builder: (context, snapshot) {
-        _planActual = snapshot.data ?? AppPlan.basico;
+        _estado = snapshot.data ?? EstadoPlan.porDefecto;
+
         final bool historialDisponible =
             PlanService.tieneHistorial(_planActual);
         final bool graficasDisponibles =
@@ -225,20 +361,6 @@ class _HomePanelState extends State<HomePanel> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bug_report, color: AppColors.texto),
-            tooltip: 'Probar Crashlytics',
-            onPressed: () {
-              FirebaseCrashlytics.instance.recordError(
-                Exception('Error de prueba para Crashlytics'),
-                StackTrace.current,
-                reason: 'Prueba manual',
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Error de prueba enviado')),
-              );
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.workspace_premium, color: AppColors.texto),
             tooltip: 'Mis paquetes',
             onPressed: () {
@@ -250,12 +372,7 @@ class _HomePanelState extends State<HomePanel> {
           ),
           IconButton(
             icon: Icon(Icons.logout, color: AppColors.texto),
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => Login()),
-              );
-            },
+            onPressed: _cerrarSesion,
           ),
         ],
       ),
@@ -280,7 +397,7 @@ class _HomePanelState extends State<HomePanel> {
             bottom: 25,
             right: 25,
             child: GestureDetector(
-              onTap: mostrarOpcionesImagen,
+              onTap: _intentarSubirImagen,
               child: Container(
                 padding: EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -311,13 +428,11 @@ class _HomePanelState extends State<HomePanel> {
 
         currentIndex: currentIndex,
 
-        // ★ CORREGIDO: ahora es async y al regresar de cada pantalla
-        //   la barra vuelve a marcar "Inicio" (índice 0).
+        // Al regresar de cada pantalla la barra vuelve a marcar "Inicio".
         onTap: (index) async {
           // Índice 0: Inicio — siempre disponible
           if (index == 0) {
             setState(() => currentIndex = 0);
-            print("Inicio");
             return;
           }
 

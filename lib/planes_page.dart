@@ -1,7 +1,7 @@
 import 'package:bioconteo_colonias_bacterinas/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'services/plan_service.dart';
-import 'pago_simulado_page.dart';
+import 'pago_page.dart';
 
 class PlanesPage extends StatelessWidget {
   const PlanesPage({super.key});
@@ -20,10 +20,14 @@ class PlanesPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<AppPlan>(
-        stream: PlanService.planActualStream(),
+      body: StreamBuilder<EstadoPlan>(
+        stream: PlanService.estadoPlanStream(),
         builder: (context, snapshot) {
-          final planActual = snapshot.data ?? AppPlan.basico;
+          final estado = snapshot.data ?? EstadoPlan.porDefecto;
+          // Se marca el paquete que el usuario TIENE contratado (no el de
+          // la prueba), para que pueda contratar Premium aunque esté en
+          // su prueba gratis.
+          final planActual = estado.planBase;
 
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -34,6 +38,10 @@ class PlanesPage extends StatelessWidget {
                 style: TextStyle(color: AppColors.textoSecundario, fontSize: 14),
               ),
               const SizedBox(height: 20),
+              if (estado.pruebaActiva) ...[
+                _bannerPrueba(estado.diasPruebaRestantes),
+                const SizedBox(height: 16),
+              ],
               _tarjetaPlan(
                 context: context,
                 plan: AppPlan.basico,
@@ -55,6 +63,30 @@ class PlanesPage extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _bannerPrueba(int dias) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.amber),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.card_giftcard, color: Colors.amber),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Tienes la prueba gratis de Premium. Te '
+              '${dias == 1 ? 'queda 1 día' : 'quedan $dias días'}.',
+              style: const TextStyle(color: AppColors.texto, fontSize: 14),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -156,13 +188,13 @@ class PlanesPage extends StatelessWidget {
                         return;
                       }
 
-                      // Planes de pago (Intermedio/Premium): pasan primero
-                      // por la pantalla de pago simulado. Ahí, si el "pago"
-                      // se completa, se llama a PlanService.cambiarPlan().
+                      // Planes de pago (Intermedio/Premium): pasan primero por
+                      // la pantalla de pago. Al completarse, se llama a
+                      // PlanService.cambiarPlan().
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => PagoSimuladoPage(plan: plan),
+                          builder: (_) => PagoPage(plan: plan),
                         ),
                       );
                     },

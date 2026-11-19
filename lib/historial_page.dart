@@ -217,6 +217,10 @@ class _HistorialPageState extends State<HistorialPage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => DetallesPage(
+                                      docId: docs[index].id,
+                                      nombreMuestra:
+                                          (data['nombreMuestra'] ?? 'Bacterias')
+                                              .toString(),
                                       fecha: fecha,
                                       hora: hora,
                                       conteo: conteo,
@@ -224,6 +228,11 @@ class _HistorialPageState extends State<HistorialPage> {
                                       imagenBase64: imagenBase64,
                                       // Respaldo para reportes viejos.
                                       imagePath: imagenExiste ? rutaImagen : '',
+                                      // Análisis de Claude guardado en el reporte.
+                                      analisisIA: data['analisisIA'] is Map
+                                          ? Map<String, dynamic>.from(
+                                              data['analisisIA'] as Map)
+                                          : null,
                                     ),
                                   ),
                                 );

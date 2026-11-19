@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'registro.dart';
 
+
 class Login extends StatefulWidget {
   @override
   _LoginState createState() => _LoginState();
@@ -18,6 +19,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   bool isLoading = false;
    bool _obscurePassword = true;
+
 
 
   @override

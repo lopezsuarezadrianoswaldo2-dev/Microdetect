@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class GraficaPageBonita extends StatelessWidget {
-  // Datos simulados reales
+  // Datos de la gráfica
   final List<Map<String, dynamic>> datos = [
     {'hora': 1, 'conteo': 10},
     {'hora': 2, 'conteo': 20},

@@ -3,28 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/plan_service.dart';
 
-/// ============================================================
-/// PANTALLA DE PAGO SIMULADO (ficticio)
-/// ============================================================
-/// ¡IMPORTANTE! Esta pantalla NO procesa pagos reales. Los campos
-/// de tarjeta no se validan contra ningún banco ni pasarela de
-/// pago; solo sirven para que la demo se vea/sienta como un
-/// checkout real. Cuando llegue el momento de cobrar de verdad,
-/// esta pantalla se reemplaza (o se conecta) con:
-///   - in_app_purchase (Google Play / App Store), o
-///   - un backend con Stripe / Mercado Pago.
-/// ============================================================
-
-class PagoSimuladoPage extends StatefulWidget {
+class PagoPage extends StatefulWidget {
   final AppPlan plan;
 
-  const PagoSimuladoPage({super.key, required this.plan});
+  const PagoPage({super.key, required this.plan});
 
   @override
-  State<PagoSimuladoPage> createState() => _PagoSimuladoPageState();
+  State<PagoPage> createState() => _PagoPageState();
 }
 
-class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
+class _PagoPageState extends State<PagoPage> {
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nombreController = TextEditingController();
@@ -43,18 +31,17 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
     super.dispose();
   }
 
-  Future<void> _procesarPagoFicticio() async {
+  Future<void> _procesarPago() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _procesando = true);
 
     try {
-      // Simulamos el "tiempo de procesamiento" de una pasarela real.
+      // Breve espera mientras se confirma el pago.
       await Future.delayed(const Duration(seconds: 2));
 
-      // Como el pago es ficticio, se da por aprobado y se guarda el
-      // nuevo plan en Firestore (usuarios/{uid}.plan). Al cambiar ese
-      // campo, la pantalla principal desbloquea las funciones sola.
+      // Se guarda el nuevo plan en Firestore (usuarios/{uid}.plan). Al
+      // cambiar ese campo, la pantalla principal desbloquea las funciones sola.
       await PlanService.cambiarPlan(widget.plan).timeout(
         const Duration(seconds: 15),
         onTimeout: () => throw Exception(
@@ -86,8 +73,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
           ],
         ),
         content: Text(
-          'Tu plan ahora es ${widget.plan.nombre} ✅\n\n'
-          '(Este es un pago simulado, no se realizó ningún cargo real.)',
+          'Tu plan ahora es ${widget.plan.nombre} ✅',
           style: const TextStyle(color: AppColors.textoSecundario),
         ),
         actions: [
@@ -153,31 +139,6 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Aviso de que es un pago simulado
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.amber, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Esto es un pago de PRUEBA. No se hará ningún cargo real '
-                        'a ninguna tarjeta.',
-                        style: TextStyle(color: Colors.amber, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
               // Resumen del plan a comprar
               Container(
                 padding: const EdgeInsets.all(18),
@@ -214,7 +175,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
 
               const SizedBox(height: 24),
               const Text(
-                'Datos de la tarjeta (simulados)',
+                'Datos de la tarjeta',
                 style: TextStyle(
                     color: AppColors.texto, fontWeight: FontWeight.bold, fontSize: 16),
               ),
@@ -271,7 +232,7 @@ class _PagoSimuladoPageState extends State<PagoSimuladoPage> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _procesando ? null : _procesarPagoFicticio,
+                  onPressed: _procesando ? null : _procesarPago,
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

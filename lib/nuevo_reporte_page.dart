@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'services/colonia_counter.dart';
 import 'services/plan_service.dart';
+import 'services/claude_service.dart';
+import 'services/dialogos_plan.dart';
 import 'planes_page.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -51,13 +53,15 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
   File? _imagenMarcadaTemp;
   final TextEditingController _descripcionController = TextEditingController();
 
-  AppPlan _planActual = AppPlan.basico;
+  // ---- Análisis con Claude ----
+  bool _analizandoIA = false;
+  AnalisisIA? _analisis;
+  String? _errorIA;
 
   @override
   void initState() {
     super.initState();
     _procesarImagen();
-    _cargarPlan();
   }
 
   @override
@@ -66,68 +70,22 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
     super.dispose();
   }
 
-  Future<void> _cargarPlan() async {
-    final plan = await PlanService.obtenerPlanActual();
-    if (mounted) setState(() => _planActual = plan);
-  }
+  // ============================================================
+  // LÍMITE DE IMÁGENES
+  // Muestra el aviso y cierra esta pantalla. Si el usuario elige
+  // "Ver paquetes", lo lleva a la pantalla de paquetes.
+  // ============================================================
+  Future<void> _bloquearPorLimite() async {
+    final EstadoPlan estado = await PlanService.obtenerEstado();
+    if (!mounted) return;
 
-  // ============================================================
-  // ANÁLISIS CON IA — función exclusiva del paquete Premium.
-  //
-  // Aquí es donde, más adelante, se debe llamar al modelo de IA real
-  // (por ejemplo enviando la imagen a un backend propio o a la API de
-  // un proveedor de visión por computadora) para dar un análisis más
-  // detallado que el conteo automático actual: por ejemplo, distinguir
-  // tipos de colonias, estimar contaminación, sugerir diluciones, etc.
-  // Por ahora solo queda gateado detrás del plan Premium.
-  // ============================================================
-  void _analizarConIA() {
-    if (!PlanService.tieneIA(_planActual)) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: AppColors.tarjeta,
-          title: Row(
-            children: const [
-              Icon(Icons.auto_awesome, color: Colors.amber),
-              SizedBox(width: 10),
-              Text('Función Premium', style: TextStyle(color: AppColors.texto)),
-            ],
-          ),
-          content: const Text(
-            'El análisis con Inteligencia Artificial solo está disponible '
-            'en el paquete Premium.',
-            style: TextStyle(color: AppColors.textoSecundario),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar',
-                  style: TextStyle(color: AppColors.textoSecundario)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PlanesPage()),
-                );
-              },
-              child: const Text('Ver paquetes',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-      return;
+    final NavigatorState navigator = Navigator.of(context);
+    final bool verPaquetes = await mostrarDialogoLimiteImagenes(context, estado);
+
+    navigator.pop();
+    if (verPaquetes) {
+      navigator.push(MaterialPageRoute(builder: (_) => const PlanesPage()));
     }
-
-    // TODO: aquí se conecta el análisis con IA real para usuarios Premium.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Análisis con IA: función en desarrollo 🚧'),
-      ),
-    );
   }
 
   // ============================================================
@@ -135,19 +93,38 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
   //  - Rendimiento: traza personalizada "analisis_imagen".
   //  - Estabilidad: si falla, se registra en Crashlytics con la
   //    etiqueta funcionalidad = analisis_imagen.
+  //  - Límite: cada imagen analizada con éxito cuenta para el
+  //    límite del paquete.
   // ============================================================
   Future<void> _procesarImagen() async {
     final trace = FirebasePerformance.instance.newTrace('analisis_imagen');
     await trace.start();
 
     try {
+      // 1) ¿Todavía le quedan imágenes en su paquete?
+      final EstadoPlan estado = await PlanService.obtenerEstado();
+      if (!estado.puedeSubirImagen) {
+        trace.putAttribute('resultado', 'limite');
+        await _bloquearPorLimite();
+        return;
+      }
+
+      // 2) Conteo automático
       final resultado = await ColoniaCounter.contar(widget.imagen);
 
       // Guardamos la imagen marcada en un archivo temporal para poder
-      // mostrarla y luego guardarla de forma permanente en el celular.
+      // mostrarla y luego guardarla de forma permanente.
       final tempPath = '${widget.imagen.path}_marcada.jpg';
       final tempFile = File(tempPath);
       await tempFile.writeAsBytes(resultado.imagenProcesada);
+
+      // 3) Se descuenta la imagen del límite (transacción).
+      final bool registrada = await PlanService.registrarImagenUsada();
+      if (!registrada) {
+        trace.putAttribute('resultado', 'limite');
+        await _bloquearPorLimite();
+        return;
+      }
 
       trace.putAttribute('resultado', 'exito');
       trace.setMetric('colonias_detectadas', resultado.conteo);
@@ -177,6 +154,55 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       }
     } finally {
       await trace.stop();
+    }
+  }
+
+  // ============================================================
+  // ANÁLISIS CON CLAUDE (disponible en TODOS los paquetes)
+  //  - Rendimiento: traza personalizada "analisis_ia".
+  //  - Estabilidad: errores inesperados van a Crashlytics.
+  // ============================================================
+  Future<void> _analizarConClaude() async {
+    if (_analizandoIA) return;
+
+    setState(() {
+      _analizandoIA = true;
+      _errorIA = null;
+    });
+
+    final trace = FirebasePerformance.instance.newTrace('analisis_ia');
+    await trace.start();
+
+    try {
+      // Se envía la foto ORIGINAL (sin círculos) junto con el conteo
+      // automático, para que Claude lo compare con lo que ve.
+      final AnalisisIA resultado = await ClaudeService.analizarPlaca(
+        widget.imagen,
+        conteoLocal: _conteo,
+      );
+
+      trace.putAttribute('resultado', 'exito');
+      if (!mounted) return;
+      setState(() => _analisis = resultado);
+    } on ClaudeException catch (e) {
+      trace.putAttribute('resultado', 'error');
+      if (mounted) setState(() => _errorIA = e.mensaje);
+    } catch (e, st) {
+      trace.putAttribute('resultado', 'error');
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance.setCustomKey('funcionalidad', 'analisis_ia');
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          st,
+          reason: 'Error en el análisis con Claude',
+        );
+      }
+      if (mounted) {
+        setState(() => _errorIA = 'No se pudo completar el análisis con IA.');
+      }
+    } finally {
+      await trace.stop();
+      if (mounted) setState(() => _analizandoIA = false);
     }
   }
 
@@ -217,7 +243,8 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
 
       // ============================================================
       // 2) GUARDAR EL REPORTE COMPLETO EN FIRESTORE
-      //    El campo "imagenBase64" contiene la foto marcada.
+      //    El campo "imagenBase64" contiene la foto marcada y, si el
+      //    usuario pidió el análisis con Claude, "analisisIA" lo guarda.
       // ============================================================
       debugPrint('[REPORTE] 3) Guardando documento en Firestore...');
 
@@ -229,6 +256,7 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
         'fecha': fecha,
         'hora': hora,
         'imagenBase64': imagenBase64,
+        if (_analisis != null) 'analisisIA': _analisis!.toMap(),
         'creado': FieldValue.serverTimestamp(),
       }).timeout(
         const Duration(seconds: 30),
@@ -266,6 +294,79 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
       await trace.stop();
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  // ============================================================
+  // TARJETA CON EL RESULTADO DE CLAUDE
+  // ============================================================
+  Widget _tarjetaAnalisis(AnalisisIA a) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.tarjeta,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Análisis de Claude',
+                style: TextStyle(
+                  color: AppColors.texto,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!a.esPlacaPetri)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Claude no reconoce esta imagen como una caja Petri. '
+                'Revisa que la foto sea la correcta.',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+            ),
+          ...a.secciones.map(
+            (s) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.key,
+                    style: const TextStyle(
+                      color: AppColors.textoSecundario,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    s.value,
+                    style: const TextStyle(
+                        color: AppColors.texto, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Text(
+            'Referencia orientativa. El conteo oficial del reporte es el '
+            'automático y no sustituye el criterio del laboratorista.',
+            style: TextStyle(color: AppColors.textoTenue, fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -335,21 +436,27 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                   ),
                   const SizedBox(height: 14),
 
-                  // ---- BOTÓN ANÁLISIS CON IA (Premium) ----
+                  // ---- BOTÓN ANÁLISIS CON CLAUDE (todos los paquetes) ----
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _analizarConIA,
-                      icon: Icon(
-                        PlanService.tieneIA(_planActual)
-                            ? Icons.auto_awesome
-                            : Icons.lock,
-                        color: Colors.amber,
-                        size: 20,
-                      ),
-                      label: const Text(
-                        'Análisis con IA (Premium)',
-                        style: TextStyle(color: AppColors.texto),
+                      onPressed: _analizandoIA ? null : _analizarConClaude,
+                      icon: _analizandoIA
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.amber),
+                            )
+                          : const Icon(Icons.auto_awesome,
+                              color: Colors.amber, size: 20),
+                      label: Text(
+                        _analizandoIA
+                            ? 'Claude está analizando...'
+                            : (_analisis == null
+                                ? 'Analizar con Claude'
+                                : 'Repetir análisis con Claude'),
+                        style: const TextStyle(color: AppColors.texto),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.amber),
@@ -360,6 +467,19 @@ class _NuevoReportePageState extends State<NuevoReportePage> {
                       ),
                     ),
                   ),
+
+                  if (_errorIA != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _errorIA!,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  ],
+
+                  if (_analisis != null) ...[
+                    const SizedBox(height: 14),
+                    _tarjetaAnalisis(_analisis!),
+                  ],
 
                   const SizedBox(height: 20),
                   const Text('Descripción (opcional)',
